@@ -1,7 +1,9 @@
 import React, { Component } from 'react';
 import PropTypes from 'prop-types';
-import Link, { navigateTo } from 'gatsby-link';
+import { Link, navigate, StaticQuery, graphql } from 'gatsby';
 import Helmet from 'react-helmet';
+import Swipeable from 'react-swipeable';
+import Transition from '../components/transition';
 
 import './index.css';
 
@@ -15,78 +17,99 @@ const Header = ({ name, title, date }) => (
 );
 
 class TemplateWrapper extends Component {
-  componentDidMount() {
-    document.addEventListener('keydown', ({ keyCode }) => {
-      const now = parseInt(location.pathname.substr(1));
-      const NEXT = 39;
-      const PREV = 37;
+  NEXT = [13, 32, 39];
+  PREV = 37;
 
-      const slides = this.props.data.allSitePage.edges.filter(page => {
-        const id = parseInt(page.node.path.substr(1));
-        if (id && id !== 404) {
-          return true;
-        }
-      });
+  swipeLeft = () => {
+    this.navigate({ keyCode: this.NEXT[0] });
+  };
 
-      if (now) {
-        if (keyCode === PREV && now === 1) {
-          return false;
-        } else if (keyCode === NEXT && now === slides.length) {
-          return false;
-        } else if (keyCode === NEXT) {
-          navigateTo(`/${now + 1}`);
-        } else if (keyCode === PREV) {
-          navigateTo(`/${now - 1}`);
-        }
+  swipeRight = () => {
+    this.navigate({ keyCode: this.PREV });
+  };
+
+  navigate = ({ keyCode }) => {
+    const now = this.props.data.slide.index;
+    const slidesLength = this.props.slidesLength;
+
+    if (now) {
+      if (keyCode === this.PREV && now === 1) {
+        return false;
+      } else if (this.NEXT.indexOf(keyCode) !== -1 && now === slidesLength) {
+        return false;
+      } else if (this.NEXT.indexOf(keyCode) !== -1) {
+        navigate(`/${now + 1}`);
+      } else if (keyCode === this.PREV) {
+        navigate(`/${now - 1}`);
       }
-    });
+    }
+  };
+
+  componentDidMount() {
+    document.addEventListener('keydown', this.navigate);
   }
+
+  componentWillUnmount() {
+    document.removeEventListener('keydown', this.navigate);
+  }
+
   render() {
-    const { children, data } = this.props;
+    const { location, children, site } = this.props;
+
     return (
       <div>
         <Helmet
-          title={`${data.site.siteMetadata.title} — ${data.site.siteMetadata
-            .name}`}
+          title={`${site.siteMetadata.title} — ${site.siteMetadata.name}`}
         />
         <Header
-          name={data.site.siteMetadata.name}
-          title={data.site.siteMetadata.title}
-          date={data.site.siteMetadata.date}
+          name={site.siteMetadata.name}
+          title={site.siteMetadata.title}
+          date={site.siteMetadata.date}
         />
-        <div id="slide">{children()}</div>
+        <Swipeable
+          onSwipedLeft={this.swipeLeft}
+          onSwipedRight={this.swipeRight}
+        >
+          <Transition location={location}>
+            <div id="slide" style={{'width': '100%'}}>{children}</div>
+          </Transition>
+        </Swipeable>
       </div>
     );
   }
 }
 
 TemplateWrapper.propTypes = {
-  children: PropTypes.func,
+  children: PropTypes.node,
   data: PropTypes.object,
 };
 
-export default TemplateWrapper;
-
-export const pageQuery = graphql`
-  query PageQuery {
-    site {
-      siteMetadata {
-        name
-        title
-        date
-      }
-    }
-    allSitePage {
-      edges {
-        node {
-          path
-          component
-          pluginCreator {
+export default props => (
+  <StaticQuery
+    query={graphql`
+      query IndexQuery {
+        site {
+          siteMetadata {
             name
-            pluginFilepath
+            title
+            date
+          }
+        }
+        allSlide {
+          edges {
+            node {
+              id
+            }
           }
         }
       }
-    }
-  }
-`;
+    `}
+    render={data => (
+      <TemplateWrapper
+        site={data.site}
+        slidesLength={data.allSlide.edges.length}
+        {...props}
+      />
+    )}
+  />
+);
